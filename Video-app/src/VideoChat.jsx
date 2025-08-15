@@ -90,64 +90,73 @@ export default function VideoChat() {
   }
 
   return (
-   <div className="relative w-full h-screen bg-gray-900 flex items-center justify-center">
+  <div className="relative w-full h-screen bg-gray-900 flex items-center justify-center">
   {/* Caller Video */}
+  <video
+    ref={remoteVideoRef}
+    autoPlay
+    playsInline
+    className="w-full h-full object-cover"
+  />
+
+  {/* Your own video overlay */}
+  <div className="absolute top-4 right-4 w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden border-2 border-white shadow-lg">
     <video
-      ref={remoteVideoRef}
+      ref={localVideoRef}
       autoPlay
-      muted
       playsInline
+      muted
       className="w-full h-full object-cover"
     />
+  </div>
 
-    {/* Your own video overlay */}
-    <div className="absolute top-4 right-4 w-32 h-32 md:w-48 md:h-48 rounded-full overflow-hidden border-4 border-red shadow-lg">
-      <video
-        ref={localVideoRef}
-        autoPlay
-        playsInline
-        muted
-        className="w-full h-full object-cover"
-      />
-    </div>
+  {/* Controls and Call ID */}
+  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-3 w-11/12 sm:w-auto">
+    
+    {/* Shareable ID */}
+    {generatedId && (
+      <div className="bg-black bg-opacity-70 text-white font-mono font-bold p-2 rounded flex items-center gap-2 w-full sm:w-auto justify-between">
+        <span className="truncate">ID: {generatedId}</span>
+        <button
+          onClick={() => navigator.clipboard.writeText(generatedId)}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded"
+        >
+          Copy
+        </button>
+      </div>
+    )}
 
-    {/* Controls */}
-    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-4">
+    {/* Buttons */}
+    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
       <button
         onClick={startWebcam}
-        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-full shadow-lg transition"
+        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-full shadow-lg w-full sm:w-auto"
       >
         Start Webcam
       </button>
       <button
         onClick={createCall}
-        className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-full shadow-lg transition"
+        className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-full shadow-lg w-full sm:w-auto"
       >
         Create Call
       </button>
       <button
         onClick={answerCall}
-        className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-full shadow-lg transition"
+        className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-full shadow-lg w-full sm:w-auto"
       >
         Answer
       </button>
     </div>
 
-    {/* Call ID input */}
-    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-      {generatedId && (
-        <p className="text-white font-mono font-bold bg-black bg-opacity-50 p-2 rounded">
-          Share this ID: {generatedId}
-        </p>
-      )}
-      <input
-        value={callId}
-        onChange={e => setCallId(e.target.value)}
-        placeholder="Enter Call ID"
-        className="px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-      />
-    </div>
+    {/* Input for entering Call ID */}
+    <input
+      value={callId}
+      onChange={e => setCallId(e.target.value)}
+      placeholder="Enter Call ID"
+      className="mt-2 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 w-full sm:w-auto"
+    />
   </div>
+</div>
 
   )
 }

@@ -100,7 +100,7 @@ export default function VideoChat() {
     />
 
     {/* Your own video overlay */}
-    <div className="absolute top-4 right-4 w-32 h-32 md:w-48 md:h-48 rounded-full overflow-hidden border-4 border-white shadow-lg">
+    <div className="absolute top-4 right-4 w-32 h-32 md:w-48 md:h-48 rounded-full overflow-hidden border-4 border-red shadow-lg">
       <video
         ref={localVideoRef}
         autoPlay

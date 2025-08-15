@@ -95,6 +95,7 @@ export default function VideoChat() {
     <video
       ref={remoteVideoRef}
       autoPlay
+      muted
       playsInline
       className="w-full h-full object-cover"
     />

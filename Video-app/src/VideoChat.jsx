@@ -14,21 +14,13 @@ export default function VideoChat() {
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        // Add TURN server if needed, e.g.:
-        // {
-        //   urls: 'turn:your.turn.server:3478',
-        //   username: 'your-username',
-        //   credential: 'your-credential',
-        // },
+        // Add TURN server if needed
       ],
     });
     pcRef.current = pc;
 
     pc.ontrack = (event) => {
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = event.streams[0];
-        console.log('Received remote stream');
-      }
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
     };
 
     pc.oniceconnectionstatechange = () => {
@@ -44,7 +36,6 @@ export default function VideoChat() {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       localVideoRef.current.srcObject = stream;
       stream.getTracks().forEach(track => pcRef.current?.addTrack(track, stream));
-      console.log('Local stream added');
       setError('');
     } catch (err) {
       console.error('Cannot access webcam/mic:', err);
@@ -54,8 +45,6 @@ export default function VideoChat() {
 
   async function setupSubscriptions(callId, type) {
     supabase.removeAllChannels();
-    console.log(`Setting up subscriptions for call ${callId} as ${type}`);
-
     if (type === 'offer') {
       supabase
         .channel(`public:calls:id=eq.${callId}`)
@@ -64,7 +53,6 @@ export default function VideoChat() {
           { event: 'UPDATE', schema: 'public', table: 'calls', filter: `id=eq.${callId}` },
           payload => {
             if (payload.new.answer_sdp && pcRef.current) {
-              console.log('Received answer SDP');
               pcRef.current.setRemoteDescription(new RTCSessionDescription(JSON.parse(payload.new.answer_sdp)));
             }
           }
@@ -79,7 +67,6 @@ export default function VideoChat() {
         { event: 'INSERT', schema: 'public', table: 'candidates', filter: `call_id=eq.${callId}` },
         payload => {
           if (payload.new.type !== type && pcRef.current) {
-            console.log('Received ICE candidate:', payload.new.candidate);
             pcRef.current.addIceCandidate(new RTCIceCandidate(payload.new.candidate));
           }
         }
@@ -96,7 +83,6 @@ export default function VideoChat() {
 
       pcRef.current.onicecandidate = async (event) => {
         if (event.candidate) {
-          console.log('Sending offer ICE candidate');
           await supabase.from('candidates').insert({
             call_id: call.id,
             type: 'offer',
@@ -108,7 +94,6 @@ export default function VideoChat() {
       const offer = await pcRef.current.createOffer();
       await pcRef.current.setLocalDescription(offer);
       await supabase.from('calls').update({ offer_sdp: JSON.stringify(offer) }).eq('id', call.id);
-      console.log('Offer created and saved:', call.id);
 
       setError('');
     } catch (err) {
@@ -132,11 +117,9 @@ export default function VideoChat() {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       localVideoRef.current.srcObject = stream;
       stream.getTracks().forEach(track => pcRef.current.addTrack(track, stream));
-      console.log('Local stream added for answer');
 
       pcRef.current.onicecandidate = async (event) => {
         if (event.candidate) {
-          console.log('Sending answer ICE candidate');
           await supabase.from('candidates').insert({
             call_id: callId,
             type: 'answer',
@@ -146,7 +129,6 @@ export default function VideoChat() {
       };
 
       await pcRef.current.setRemoteDescription(new RTCSessionDescription(JSON.parse(call.offer_sdp)));
-      console.log('Offer SDP set');
 
       const { data: candidates } = await supabase
         .from('candidates')
@@ -154,14 +136,12 @@ export default function VideoChat() {
         .eq('call_id', callId)
         .eq('type', 'offer');
       for (const candidate of candidates) {
-        console.log('Applying existing offer ICE candidate');
         await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate.candidate));
       }
 
       const answer = await pcRef.current.createAnswer();
       await pcRef.current.setLocalDescription(answer);
       await supabase.from('calls').update({ answer_sdp: JSON.stringify(answer) }).eq('id', callId);
-      console.log('Answer created and saved');
 
       setError('');
     } catch (err) {
@@ -176,7 +156,6 @@ export default function VideoChat() {
     initPeerConnection();
     startWebcam();
     return () => {
-      console.log('Cleaning up resources');
       if (pcRef.current) {
         pcRef.current.close();
         pcRef.current = null;
@@ -203,7 +182,6 @@ export default function VideoChat() {
             <button
               onClick={() => navigator.clipboard.writeText(generatedId)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded"
-              disabled={isLoading}
             >
               Copy
             </button>

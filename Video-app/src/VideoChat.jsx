@@ -110,13 +110,9 @@ export default function VideoChat() {
       if (!callId) throw new Error('Call ID is required');
       const { data: call } = await supabase.from('calls').select().eq('id', callId).single();
       if (!call) throw new Error('Call ID not found');
+      if (!call.offer_sdp) throw new Error('Offer not available yet. Please wait a moment and try again.');
 
-      await initPeerConnection();
       await setupSubscriptions(callId, 'answer');
-
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localVideoRef.current.srcObject = stream;
-      stream.getTracks().forEach(track => pcRef.current.addTrack(track, stream));
 
       pcRef.current.onicecandidate = async (event) => {
         if (event.candidate) {
@@ -135,7 +131,7 @@ export default function VideoChat() {
         .select()
         .eq('call_id', callId)
         .eq('type', 'offer');
-      for (const candidate of candidates) {
+      for (const candidate of candidates || []) {
         await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate.candidate));
       }
 

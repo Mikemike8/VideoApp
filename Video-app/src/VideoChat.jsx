@@ -8,14 +8,20 @@ export default function VideoChat() {
   const [callId, setCallId] = useState('')
   const [generatedId, setGeneratedId] = useState('')
 
-  async function initPeerConnection() {
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] })
-    pcRef.current = pc
+async function initPeerConnection() {
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  })
+  pcRef.current = pc
 
-    pc.ontrack = (event) => {
-      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0]
+  // Attach remote tracks to the remote video element
+  pc.ontrack = (event) => {
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = event.streams[0]
     }
   }
+}
+
 
   async function startWebcam() {
     await initPeerConnection()

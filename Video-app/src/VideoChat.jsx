@@ -7,93 +7,112 @@ export default function VideoChat() {
   const pcRef = useRef(null)
   const [callId, setCallId] = useState('')
   const [generatedId, setGeneratedId] = useState('')
+  const [error, setError] = useState('')
 
-async function initPeerConnection() {
-  const pc = new RTCPeerConnection({
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-  })
-  pcRef.current = pc
+  async function initPeerConnection() {
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] })
+    pcRef.current = pc
 
-  // Attach remote tracks to the remote video element
-  pc.ontrack = (event) => {
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = event.streams[0]
+    pc.ontrack = (event) => {
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0]
     }
   }
-}
-
 
   async function startWebcam() {
-    await initPeerConnection()
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    localVideoRef.current.srcObject = stream
-    stream.getTracks().forEach(track => pcRef.current.addTrack(track, stream))
+    try {
+      await initPeerConnection()
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      localVideoRef.current.srcObject = stream
+      stream.getTracks().forEach(track => pcRef.current.addTrack(track, stream))
+      setError('')
+    } catch (err) {
+      console.error("Cannot access webcam/mic:", err)
+      setError("Cannot access webcam/mic. Make sure you allowed permissions and are using HTTPS.")
+    }
   }
 
   async function createCall() {
-    const { data: call } = await supabase.from('calls').insert({}).select().single()
-    setGeneratedId(call.id)
+    try {
+      const { data: call } = await supabase.from('calls').insert({}).select().single()
+      setGeneratedId(call.id)
 
-    pcRef.current.onicecandidate = async (event) => {
-      if (event.candidate) {
-        await supabase.from('candidates').insert({
-          call_id: call.id,
-          type: 'offer',
-          candidate: event.candidate.toJSON()
-        })
-      }
-    }
-
-    const offer = await pcRef.current.createOffer()
-    await pcRef.current.setLocalDescription(offer)
-
-    await supabase.from('calls').update({ offer_sdp: JSON.stringify(offer) }).eq('id', call.id)
-
-    supabase
-      .channel(`public:calls:id=eq.${call.id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'calls', filter: `id=eq.${call.id}` }, payload => {
-        if (payload.new.answer_sdp) {
-          pcRef.current.setRemoteDescription(new RTCSessionDescription(JSON.parse(payload.new.answer_sdp)))
+      pcRef.current.onicecandidate = async (event) => {
+        if (event.candidate) {
+          await supabase.from('candidates').insert({
+            call_id: call.id,
+            type: 'offer',
+            candidate: event.candidate.toJSON()
+          })
         }
-      })
-      .subscribe()
+      }
 
-    supabase
-      .channel(`public:candidates:call_id=eq.${call.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'candidates', filter: `call_id=eq.${call.id} AND type=eq.answer` }, payload => {
-        pcRef.current.addIceCandidate(new RTCIceCandidate(payload.new.candidate))
-      })
-      .subscribe()
+      const offer = await pcRef.current.createOffer()
+      await pcRef.current.setLocalDescription(offer)
+      await supabase.from('calls').update({ offer_sdp: JSON.stringify(offer) }).eq('id', call.id)
+
+      // Listen for remote answer
+      supabase
+        .channel(`public:calls:id=eq.${call.id}`)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'calls', filter: `id=eq.${call.id}` }, payload => {
+          if (payload.new.answer_sdp) {
+            pcRef.current.setRemoteDescription(new RTCSessionDescription(JSON.parse(payload.new.answer_sdp)))
+          }
+        })
+        .subscribe()
+
+      // Listen for ICE candidates from answer
+      supabase
+        .channel(`public:candidates:call_id=eq.${call.id}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'candidates', filter: `call_id=eq.${call.id} AND type=eq.answer` }, payload => {
+          pcRef.current.addIceCandidate(new RTCIceCandidate(payload.new.candidate))
+        })
+        .subscribe()
+
+      setError('')
+    } catch (err) {
+      console.error("Error creating call:", err)
+      setError("Failed to create call. Check your Supabase connection.")
+    }
   }
 
   async function answerCall() {
-    const { data: call } = await supabase.from('calls').select().eq('id', callId).single()
-    await initPeerConnection()
+    try {
+      const { data: call } = await supabase.from('calls').select().eq('id', callId).single()
+      await initPeerConnection()
 
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    localVideoRef.current.srcObject = stream
-    stream.getTracks().forEach(track => pcRef.current.addTrack(track, stream))
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      localVideoRef.current.srcObject = stream
+      stream.getTracks().forEach(track => pcRef.current.addTrack(track, stream))
 
-    pcRef.current.onicecandidate = async (event) => {
-      if (event.candidate) {
-        await supabase.from('candidates').insert({ call_id: callId, type: 'answer', candidate: event.candidate.toJSON() })
+      pcRef.current.onicecandidate = async (event) => {
+        if (event.candidate) {
+          await supabase.from('candidates').insert({
+            call_id: callId,
+            type: 'answer',
+            candidate: event.candidate.toJSON()
+          })
+        }
       }
+
+      await pcRef.current.setRemoteDescription(new RTCSessionDescription(JSON.parse(call.offer_sdp)))
+      const answer = await pcRef.current.createAnswer()
+      await pcRef.current.setLocalDescription(answer)
+      await supabase.from('calls').update({ answer_sdp: JSON.stringify(answer) }).eq('id', callId)
+
+      supabase
+        .channel(`public:candidates:call_id=eq.${callId}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'candidates', filter: `call_id=eq.${callId} AND type=eq.offer` }, payload => {
+          pcRef.current.addIceCandidate(new RTCIceCandidate(payload.new.candidate))
+        })
+        .subscribe()
+
+      setError('')
+    } catch (err) {
+      console.error("Cannot answer call:", err)
+      setError("Failed to answer call. Check Call ID and permissions.")
     }
-
-    await pcRef.current.setRemoteDescription(new RTCSessionDescription(JSON.parse(call.offer_sdp)))
-
-    const answer = await pcRef.current.createAnswer()
-    await pcRef.current.setLocalDescription(answer)
-
-    await supabase.from('calls').update({ answer_sdp: JSON.stringify(answer) }).eq('id', callId)
-
-    supabase
-      .channel(`public:candidates:call_id=eq.${callId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'candidates', filter: `call_id=eq.${callId} AND type=eq.offer` }, payload => {
-        pcRef.current.addIceCandidate(new RTCIceCandidate(payload.new.candidate))
-      })
-      .subscribe()
   }
+
 
   return (
   <div className="relative w-full h-screen bg-gray-900 flex items-center justify-center">
